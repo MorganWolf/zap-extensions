@@ -174,19 +174,22 @@ public class GenerateTokensDialog extends AbstractDialog {
                             }
                         }
                         UUID uuid = extension.createTokenGeneratorInstance();
-                        extension.getMapOfTokenGeneratorInstance().get(uuid).startTokenGeneration(
-                                httpMessage,
-                                numGen,
-                                new HtmlParameterStats(
-                                        "",
-                                        (String) getParamName().getSelectedItem(),
-                                        HtmlParameter.Type.valueOf(
-                                                (String) getParamType().getSelectedItem()),
-                                        null,
-                                        null),
-                                getShouldRemoveCookieCheckBox().isSelected()
-                                        && getShouldRemoveCookieCheckBox()
-                                                .isEnabled()); // Could be selected but not
+                        extension
+                                .getMapOfTokenGeneratorInstance()
+                                .get(uuid)
+                                .startTokenGeneration(
+                                        httpMessage,
+                                        numGen,
+                                        new HtmlParameterStats(
+                                                "",
+                                                (String) getParamName().getSelectedItem(),
+                                                HtmlParameter.Type.valueOf(
+                                                        (String) getParamType().getSelectedItem()),
+                                                null,
+                                                null),
+                                        getShouldRemoveCookieCheckBox().isSelected()
+                                                && getShouldRemoveCookieCheckBox()
+                                                        .isEnabled()); // Could be selected but not
                         // enabled for non-cookie types
                         setVisible(false);
                     });

@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.Vector;
+import javax.swing.ImageIcon;
 import net.htmlparser.jericho.Element;
 import net.htmlparser.jericho.HTMLElementName;
 import net.htmlparser.jericho.Source;
@@ -37,8 +38,6 @@ import org.parosproxy.paros.extension.SessionChangedListener;
 import org.parosproxy.paros.model.Session;
 import org.parosproxy.paros.network.HttpMessage;
 import org.zaproxy.zap.view.ScanStatus;
-
-import javax.swing.ImageIcon;
 
 /*
  * Entry point to the ExtensionTokenGen.
@@ -58,8 +57,6 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
     UUID defaultInstanceUuid = UUID.randomUUID();
     Map<UUID, TokenGeneratorInstance> mapOfTokenGeneratorInstance = new HashMap<>();
 
-
-
     /** */
     public ExtensionTokenGen() {
         super(NAME);
@@ -77,6 +74,7 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
     public void hook(ExtensionHook extensionHook) {
         super.hook(extensionHook);
         extensionHook.addSessionListener(new SessionChangedListenerImpl());
+        extensionHook.addApiImplementor(new TokenGenApi(this));
 
         extensionHook.addOptionsParamSet(getTokenParam());
 
@@ -85,13 +83,17 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
             extensionHook.getHookMenu().addPopupMenuItem(getPopupTokenGen());
             TokenGeneratorInstance defaultInstance = new TokenGeneratorInstance(this);
             extensionHook.getHookView().addStatusPanel(defaultInstance.getTokenPanel());
-            defaultInstance.getTokenPanel().setDisplayPanel(getView().getRequestPanel(), getView().getResponsePanel());
+            defaultInstance
+                    .getTokenPanel()
+                    .setDisplayPanel(getView().getRequestPanel(), getView().getResponsePanel());
             mapOfTokenGeneratorInstance.put(defaultInstanceUuid, defaultInstance);
             extensionHook.getHookView().addOptionPanel(getTokenOptionsPanel());
 
-            this.scanStatus = new ScanStatus(
-                    new ImageIcon(getClass().getResource("/resource/icon/fugue/barcode.png")),
-                    this.getMessages().getString("tokengen.panel.title"));
+            this.scanStatus =
+                    new ScanStatus(
+                            new ImageIcon(
+                                    getClass().getResource("/resource/icon/fugue/barcode.png")),
+                            this.getMessages().getString("tokengen.panel.title"));
             getView()
                     .getMainFrame()
                     .getMainFooterPanel()
@@ -100,8 +102,10 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
     }
 
     public UUID createTokenGeneratorInstance() {
-        TokenGeneratorInstance defaultInstance = mapOfTokenGeneratorInstance.get(defaultInstanceUuid);
-        TokenGeneratorInstance instance =  new TokenGeneratorInstance(this, defaultInstance.getTokenPanel());
+        TokenGeneratorInstance defaultInstance =
+                mapOfTokenGeneratorInstance.get(defaultInstanceUuid);
+        TokenGeneratorInstance instance =
+                new TokenGeneratorInstance(this, defaultInstance.getTokenPanel());
         UUID uniqueId = UUID.randomUUID();
         mapOfTokenGeneratorInstance.put(uniqueId, instance);
         scanStatus.incScanCount();
@@ -131,10 +135,15 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
                 genTokensDialog.dispose();
             }
 
-            mapOfTokenGeneratorInstance.values().forEach(instance -> getView()
-                    .getMainFrame()
-                    .getMainFooterPanel()
-                    .removeFooterToolbarRightLabel(scanStatus.getCountLabel()));
+            mapOfTokenGeneratorInstance
+                    .values()
+                    .forEach(
+                            instance ->
+                                    getView()
+                                            .getMainFrame()
+                                            .getMainFooterPanel()
+                                            .removeFooterToolbarRightLabel(
+                                                    scanStatus.getCountLabel()));
             scanStatus.setScanCount(0);
         }
 
@@ -144,7 +153,8 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
     @Override
     public List<String> getActiveActions() {
 
-        if (mapOfTokenGeneratorInstance.values().stream().allMatch(x -> x.getRunningGenerators() == 0)) {
+        if (mapOfTokenGeneratorInstance.values().stream()
+                .allMatch(instance -> instance.getRunningGenerators() == 0)) {
             return null;
         }
 
@@ -265,7 +275,9 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
 
         @Override
         public void sessionAboutToChange(Session session) {
-            mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::stopTokenGeneration);
+            mapOfTokenGeneratorInstance
+                    .values()
+                    .forEach(TokenGeneratorInstance::stopTokenGeneration);
             mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::resetGenerators);
             mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::resetTokenPanel);
             mapOfTokenGeneratorInstance.values().stream()
@@ -283,7 +295,9 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
 
         @Override
         public void sessionModeChanged(Mode mode) {
-            mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::stopTokenGeneration);
+            mapOfTokenGeneratorInstance
+                    .values()
+                    .forEach(TokenGeneratorInstance::stopTokenGeneration);
         }
     }
 }

@@ -66,11 +66,10 @@ public class AnalyseTokensDialog extends AbstractDialog implements TokenAnalyser
     private JButton saveButton = null;
     private JProgressBar progressBar = null;
 
-    TokenAnalyserThread analyserThread = null;
-
     private static final Logger LOGGER = LogManager.getLogger(AnalyseTokensDialog.class);
 
     private ResourceBundle messages;
+    private TokenGeneratorInstance tokenGeneratorInstance;
 
     /**
      * @throws HeadlessException
@@ -160,21 +159,6 @@ public class AnalyseTokensDialog extends AbstractDialog implements TokenAnalyser
         return progressBar;
     }
 
-    public void startAnalysis(CharacterFrequencyMap cfm) {
-        this.requestFocus();
-        analyserThread = new TokenAnalyserThread(messages);
-        analyserThread.setCfm(cfm);
-        analyserThread.addListenner(this);
-        analyserThread.addOutputDestination(this.getDetailsArea());
-        analyserThread.start();
-    }
-
-    public void stopAnalysis() {
-        if (analyserThread != null) {
-            analyserThread.cancel();
-        }
-    }
-
     @Override
     public void notifyTestResult(TokenAnalysisTestResult result) {
         LOGGER.debug("notifyTestResult {} {}", result.getType(), result.getResult().name());
@@ -197,7 +181,7 @@ public class AnalyseTokensDialog extends AbstractDialog implements TokenAnalyser
             cancelButton.setText(messages.getString("tokengen.button.cancel"));
             cancelButton.addActionListener(
                     e -> {
-                        stopAnalysis();
+                        this.tokenGeneratorInstance.stopAnalysis();
                         setVisible(false);
                     });
         }
@@ -255,8 +239,8 @@ public class AnalyseTokensDialog extends AbstractDialog implements TokenAnalyser
         return gbc;
     }
 
-    public void setExtension(ExtensionTokenGen extension) {
-        // this.extension = extension;
+    public void setTokenGeneratorInstance(TokenGeneratorInstance tokenGeneratorInstance) {
+        this.tokenGeneratorInstance = tokenGeneratorInstance;
     }
 
     public void reset() {
@@ -302,7 +286,7 @@ public class AnalyseTokensDialog extends AbstractDialog implements TokenAnalyser
      *
      * @return javax.swing.ZapTextArea
      */
-    private TokenAnalysisDetailsArea getDetailsArea() {
+    public TokenAnalysisDetailsArea getDetailsArea() {
         if (detailsArea == null) {
             detailsArea = new TokenAnalysisDetailsArea();
             detailsArea.setEditable(false);
