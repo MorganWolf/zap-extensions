@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.zaproxy.zap.extension.tokengen.TokenAnalysisTestResult.Result;
@@ -54,7 +55,7 @@ public class CharacterFrequencyMap {
     private boolean exceededLong = false;
     private int minLength = Integer.MAX_VALUE;
     private int maxLength = 0;
-    private Map<Integer, Set<Character>> charsPerPosn = new HashMap<>();
+    private Map<Integer, Set<Character>> charsPerPosn = new ConcurrentHashMap<>();
     private Set<Character> allChrs = new HashSet<>();
 
     public void addToken(String token) {

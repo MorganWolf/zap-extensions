@@ -38,7 +38,7 @@ public class TokenGenerator extends SwingWorker<Void, Void> {
     private HttpMessage httpMessage = null;
     private HttpSender httpSender = null;
     private HtmlParameterStats targetToken = null;
-    private ExtensionTokenGen extension = null;
+    private TokenGeneratorInstance tokenGeneratorInstance = null;
     private boolean stopGenerating = false;
     private boolean paused = false;
     private long requestDelayDuration;
@@ -57,7 +57,7 @@ public class TokenGenerator extends SwingWorker<Void, Void> {
     protected Void doInBackground() throws Exception {
         try {
             generate();
-        } catch (Throwable e) {
+        } catch (Exception e) {
             LOGGER.error("An error occurred during token generation:", e);
         }
         return null;
@@ -104,9 +104,9 @@ public class TokenGenerator extends SwingWorker<Void, Void> {
             } catch (Exception e) {
                 LOGGER.error(e.getMessage(), e);
             }
-            this.extension.addTokenResult(msg, targetToken);
+            this.tokenGeneratorInstance.addTokenResult(msg, targetToken);
         }
-        this.extension.generatorStopped(this);
+        this.tokenGeneratorInstance.generatorStopped();
     }
 
     public void setNumberTokens(int numberTokens) {
@@ -129,8 +129,8 @@ public class TokenGenerator extends SwingWorker<Void, Void> {
         this.stopGenerating = true;
     }
 
-    public void setExtension(ExtensionTokenGen extension) {
-        this.extension = extension;
+    public void setTokenGeneratorInstance(TokenGeneratorInstance tokenGeneratorInstance) {
+        this.tokenGeneratorInstance = tokenGeneratorInstance;
     }
 
     public boolean isPaused() {
