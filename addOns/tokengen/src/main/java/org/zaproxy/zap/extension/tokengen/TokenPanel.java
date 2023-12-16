@@ -62,7 +62,8 @@ public class TokenPanel extends AbstractPanel {
     /** The name of the table that shows the token get messages. */
     public static final String RESULTS_TABLE_NAME = "TokenGenMessagesTable";
 
-    private ExtensionTokenGen extension = null;
+    private ExtensionTokenGen extension;
+    private TokenGeneratorInstance tokenGeneratorInstance;
     private JPanel panelCommand = null;
     private JToolBar panelToolbar = null;
     private JScrollPane jScrollPane = null;
@@ -85,9 +86,10 @@ public class TokenPanel extends AbstractPanel {
 
     private static final Logger LOGGER = LogManager.getLogger(TokenPanel.class);
 
-    public TokenPanel(ExtensionTokenGen extension, TokenParam tokenParam) {
+    public TokenPanel(ExtensionTokenGen extension, TokenGeneratorInstance tokenGeneratorInstance) {
         super();
         this.extension = extension;
+        this.tokenGeneratorInstance = tokenGeneratorInstance;
         this.setLayout(new CardLayout());
         this.setSize(474, 251);
         this.setName(extension.getMessages().getString("tokengen.panel.title"));
@@ -104,10 +106,7 @@ public class TokenPanel extends AbstractPanel {
                         new ImageIcon(getClass().getResource("/resource/icon/fugue/barcode.png")),
                         extension.getMessages().getString("tokengen.panel.title"));
 
-        View.getSingleton()
-                .getMainFrame()
-                .getMainFooterPanel()
-                .addFooterToolbarRightLabel(scanStatus.getCountLabel());
+
     }
 
     /**
@@ -369,7 +368,7 @@ public class TokenPanel extends AbstractPanel {
 
     private void stopScan() {
         LOGGER.debug("Stopping token generation");
-        extension.stopTokenGeneration();
+        this.tokenGeneratorInstance.stopTokenGeneration();
     }
 
     private void loadTokens() {
@@ -388,7 +387,8 @@ public class TokenPanel extends AbstractPanel {
 
                 CharacterFrequencyMap cfm = new CharacterFrequencyMap();
                 cfm.load(file);
-                this.extension.showAnalyseTokensDialog(cfm);
+                this.tokenGeneratorInstance.setCfm(cfm);
+                this.tokenGeneratorInstance.showAnalyseTokensDialog();
 
             } catch (Exception e) {
                 View.getSingleton()
@@ -434,10 +434,10 @@ public class TokenPanel extends AbstractPanel {
     private void pauseScan() {
         if (getPauseScanButton().getModel().isSelected()) {
             LOGGER.debug("Pausing token generation");
-            extension.pauseTokenGeneration();
+            this.tokenGeneratorInstance.pauseTokenGeneration();
         } else {
             LOGGER.debug("Resuming token generation");
-            extension.resumeTokenGeneration();
+            this.tokenGeneratorInstance.resumeTokenGeneration();
         }
     }
 

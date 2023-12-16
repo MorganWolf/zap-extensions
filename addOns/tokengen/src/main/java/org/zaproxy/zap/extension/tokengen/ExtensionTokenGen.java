@@ -20,52 +20,45 @@
 package org.zaproxy.zap.extension.tokengen;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.TreeSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.Vector;
-import java.util.concurrent.TimeUnit;
 import net.htmlparser.jericho.Element;
 import net.htmlparser.jericho.HTMLElementName;
 import net.htmlparser.jericho.Source;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.parosproxy.paros.Constant;
-import org.parosproxy.paros.control.Control;
 import org.parosproxy.paros.control.Control.Mode;
 import org.parosproxy.paros.extension.ExtensionAdaptor;
 import org.parosproxy.paros.extension.ExtensionHook;
 import org.parosproxy.paros.extension.SessionChangedListener;
 import org.parosproxy.paros.model.Session;
-import org.parosproxy.paros.network.HtmlParameter;
 import org.parosproxy.paros.network.HttpMessage;
-import org.zaproxy.zap.extension.params.HtmlParameterStats;
+import org.zaproxy.zap.view.ScanStatus;
+
+import javax.swing.ImageIcon;
 
 /*
- * An example ZAP extension which adds a right click menu item to all of the main
- * tabs which list messages.
+ * Entry point to the ExtensionTokenGen.
  *
- * This class is defines the extension.
  */
 public class ExtensionTokenGen extends ExtensionAdaptor {
 
     public static final String NAME = "ExtensionTokenGen";
 
     private TokenGenPopupMenu popupTokenGenMenu = null;
-    private TokenPanel tokenPanel = null;
     private GenerateTokensDialog genTokensDialog = null;
-    private AnalyseTokensDialog analyseTokensDialog = null;
 
     private TokenParam tokenParam = null;
     private TokenOptionsPanel tokenOptionsPanel;
+    private ScanStatus scanStatus;
 
-    private List<TokenGenerator> generators = Collections.emptyList();
-    private int runningGenerators = 0;
-    private CharacterFrequencyMap cfm = null;
-    private boolean manuallyStopped = false;
+    UUID defaultInstanceUuid = UUID.randomUUID();
+    Map<UUID, TokenGeneratorInstance> mapOfTokenGeneratorInstance = new HashMap<>();
 
-    private static final Logger LOGGER = LogManager.getLogger(ExtensionTokenGen.class);
+
 
     /** */
     public ExtensionTokenGen() {
@@ -90,12 +83,33 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
         if (hasView()) {
             // Register our popup menu item, as long as we're not running as a daemon
             extensionHook.getHookMenu().addPopupMenuItem(getPopupTokenGen());
-            extensionHook.getHookView().addStatusPanel(getTokenPanel());
-            this.getTokenPanel()
-                    .setDisplayPanel(getView().getRequestPanel(), getView().getResponsePanel());
-
+            TokenGeneratorInstance defaultInstance = new TokenGeneratorInstance(this);
+            extensionHook.getHookView().addStatusPanel(defaultInstance.getTokenPanel());
+            defaultInstance.getTokenPanel().setDisplayPanel(getView().getRequestPanel(), getView().getResponsePanel());
+            mapOfTokenGeneratorInstance.put(defaultInstanceUuid, defaultInstance);
             extensionHook.getHookView().addOptionPanel(getTokenOptionsPanel());
+
+            this.scanStatus = new ScanStatus(
+                    new ImageIcon(getClass().getResource("/resource/icon/fugue/barcode.png")),
+                    this.getMessages().getString("tokengen.panel.title"));
+            getView()
+                    .getMainFrame()
+                    .getMainFooterPanel()
+                    .addFooterToolbarRightLabel(scanStatus.getCountLabel());
         }
+    }
+
+    public UUID createTokenGeneratorInstance() {
+        TokenGeneratorInstance defaultInstance = mapOfTokenGeneratorInstance.get(defaultInstanceUuid);
+        TokenGeneratorInstance instance =  new TokenGeneratorInstance(this, defaultInstance.getTokenPanel());
+        UUID uniqueId = UUID.randomUUID();
+        mapOfTokenGeneratorInstance.put(uniqueId, instance);
+        scanStatus.incScanCount();
+        return uniqueId;
+    }
+
+    public Map<UUID, TokenGeneratorInstance> getMapOfTokenGeneratorInstance() {
+        return mapOfTokenGeneratorInstance;
     }
 
     @Override
@@ -105,21 +119,23 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
 
     @Override
     public void unload() {
-        stopTokenGeneration();
+        mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::stopTokenGeneration);
 
         if (hasView()) {
-            if (analyseTokensDialog != null) {
-                analyseTokensDialog.dispose();
-            }
+            mapOfTokenGeneratorInstance.values().stream()
+                    .map(TokenGeneratorInstance::getAnalyseTokensDialog)
+                    .filter(Objects::nonNull)
+                    .forEach(AnalyseTokensDialog::dispose);
 
             if (genTokensDialog != null) {
                 genTokensDialog.dispose();
             }
 
-            getView()
+            mapOfTokenGeneratorInstance.values().forEach(instance -> getView()
                     .getMainFrame()
                     .getMainFooterPanel()
-                    .removeFooterToolbarRightLabel(getTokenPanel().getScanStatus().getCountLabel());
+                    .removeFooterToolbarRightLabel(scanStatus.getCountLabel()));
+            scanStatus.setScanCount(0);
         }
 
         super.unload();
@@ -127,7 +143,8 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
 
     @Override
     public List<String> getActiveActions() {
-        if (runningGenerators == 0) {
+
+        if (mapOfTokenGeneratorInstance.values().stream().allMatch(x -> x.getRunningGenerators() == 0)) {
             return null;
         }
 
@@ -136,14 +153,7 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
         return activeActions;
     }
 
-    private TokenPanel getTokenPanel() {
-        if (tokenPanel == null) {
-            tokenPanel = new TokenPanel(this, this.getTokenParam());
-        }
-        return tokenPanel;
-    }
-
-    private TokenParam getTokenParam() {
+    public TokenParam getTokenParam() {
         if (tokenParam == null) {
             tokenParam = new TokenParam();
         }
@@ -216,36 +226,6 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
         return fifs;
     }
 
-    protected void addTokenResult(HttpMessage msg, HtmlParameterStats targetToken) {
-        // Extract the token
-        String token = null;
-        switch (targetToken.getType()) {
-            case cookie:
-                TreeSet<HtmlParameter> cookies = msg.getCookieParams();
-                Iterator<HtmlParameter> iter = cookies.iterator();
-                while (iter.hasNext()) {
-                    HtmlParameter cookie = iter.next();
-                    if (cookie.getName().equals(targetToken.getName())) {
-                        token = cookie.getValue();
-                        break;
-                    }
-                }
-                break;
-            case form:
-                token = this.getTokenValue(msg, targetToken.getName());
-                break;
-            case url:
-                // TODO
-                break;
-        }
-        if (token != null) {
-            this.cfm.addToken(token);
-            msg.setNote(token);
-        }
-
-        this.getTokenPanel().addTokenResult(new MessageSummary(msg));
-    }
-
     private TokenGenPopupMenu getPopupTokenGen() {
         if (popupTokenGenMenu == null) {
             popupTokenGenMenu =
@@ -269,100 +249,8 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
         this.getGenerateTokensDialog().setVisible(true);
     }
 
-    private AnalyseTokensDialog getAnalyseTokensDialog() {
-        if (this.analyseTokensDialog == null) {
-            this.analyseTokensDialog = new AnalyseTokensDialog(getMessages());
-            this.analyseTokensDialog.setExtension(this);
-        }
-        return this.analyseTokensDialog;
-    }
-
-    public void showAnalyseTokensDialog(CharacterFrequencyMap cfm) {
-        this.getAnalyseTokensDialog().reset();
-        this.getAnalyseTokensDialog().setVisible(true);
-        this.getAnalyseTokensDialog().startAnalysis(cfm);
-    }
-
-    public void showAnalyseTokensDialog() {
-        this.showAnalyseTokensDialog(this.cfm);
-    }
-
-    @SuppressWarnings("fallthrough")
-    public void startTokenGeneration(
-            HttpMessage msg,
-            int numGen,
-            HtmlParameterStats htmlParameterStats,
-            boolean shouldRemoveCookie) {
-        switch (Control.getSingleton().getMode()) {
-            case safe:
-                throw new IllegalStateException("Token generation is not allowed in Safe mode");
-            case protect:
-                if (!msg.isInScope()) {
-                    throw new IllegalStateException(
-                            "Token generation is not allowed with a message not in scope when in Protected mode: "
-                                    + msg.getRequestHeader().getURI());
-                }
-            case standard:
-            case attack:
-                // No problem
-                break;
-        }
-
-        this.cfm = new CharacterFrequencyMap();
-        LOGGER.debug("startTokenGeneration {} # {}", msg.getRequestHeader().getURI(), numGen);
-        this.getTokenPanel().scanStarted(numGen);
-
-        int numThreads = this.getTokenParam().getThreadsPerScan();
-        this.manuallyStopped = false;
-
-        generators = new ArrayList<>();
-
-        for (int i = 0; i < numThreads; i++) {
-            TokenGenerator gen = new TokenGenerator();
-            generators.add(gen);
-
-            gen.setExtension(this);
-            gen.setHttpMessage(msg);
-            gen.setNumberTokens(numGen / numThreads); // TODO what about remainder?
-            gen.setTargetToken(htmlParameterStats);
-            gen.setRequestDelay(getTokenParam().getRequestDelayInMs(), TimeUnit.MILLISECONDS);
-            gen.setShouldRemoveCookie(shouldRemoveCookie);
-            gen.execute();
-            this.runningGenerators++;
-        }
-    }
-
-    protected void generatorStopped(TokenGenerator gen) {
-        this.runningGenerators--;
-        LOGGER.debug("generatorStopped runningGenerators {}", runningGenerators);
-
-        if (this.runningGenerators <= 0) {
-            LOGGER.debug("generatorStopped scanFinished");
-            this.getTokenPanel().scanFinshed();
-
-            if (!manuallyStopped) {
-                this.showAnalyseTokensDialog();
-            }
-        }
-    }
-
-    public void stopTokenGeneration() {
-        this.manuallyStopped = true;
-        for (TokenGenerator gen : generators) {
-            gen.stopGenerating();
-        }
-    }
-
-    public void pauseTokenGeneration() {
-        for (TokenGenerator gen : generators) {
-            gen.setPaused(true);
-        }
-    }
-
-    public void resumeTokenGeneration() {
-        for (TokenGenerator gen : generators) {
-            gen.setPaused(false);
-        }
+    public ScanStatus getScanStatus() {
+        return scanStatus;
     }
 
     @Override
@@ -377,16 +265,13 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
 
         @Override
         public void sessionAboutToChange(Session session) {
-            stopTokenGeneration();
-            generators = Collections.emptyList();
-
-            if (tokenPanel != null) {
-                tokenPanel.reset();
-            }
-
-            if (analyseTokensDialog != null) {
-                analyseTokensDialog.setVisible(false);
-            }
+            mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::stopTokenGeneration);
+            mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::resetGenerators);
+            mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::resetTokenPanel);
+            mapOfTokenGeneratorInstance.values().stream()
+                    .map(TokenGeneratorInstance::getAnalyseTokensDialog)
+                    .filter(Objects::nonNull)
+                    .forEach(analyseTokensDialog -> analyseTokensDialog.setVisible(false));
 
             if (genTokensDialog != null) {
                 genTokensDialog.setVisible(false);
@@ -398,13 +283,7 @@ public class ExtensionTokenGen extends ExtensionAdaptor {
 
         @Override
         public void sessionModeChanged(Mode mode) {
-            if (Mode.safe.equals(mode)) {
-                stopTokenGeneration();
-            } else if (Mode.protect.equals(mode)) {
-                if (!generators.isEmpty() && !generators.get(0).getHttpMessage().isInScope()) {
-                    stopTokenGeneration();
-                }
-            }
+            mapOfTokenGeneratorInstance.values().forEach(TokenGeneratorInstance::stopTokenGeneration);
         }
     }
 }
