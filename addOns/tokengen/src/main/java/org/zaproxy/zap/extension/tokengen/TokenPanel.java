@@ -105,8 +105,6 @@ public class TokenPanel extends AbstractPanel {
                 new ScanStatus(
                         new ImageIcon(getClass().getResource("/resource/icon/fugue/barcode.png")),
                         extension.getMessages().getString("tokengen.panel.title"));
-
-
     }
 
     /**
