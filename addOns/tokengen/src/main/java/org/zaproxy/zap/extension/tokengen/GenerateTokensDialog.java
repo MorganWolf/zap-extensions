@@ -25,6 +25,7 @@ import java.awt.HeadlessException;
 import java.util.Iterator;
 import java.util.ResourceBundle;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.Vector;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -172,8 +173,8 @@ public class GenerateTokensDialog extends AbstractDialog {
                                 return;
                             }
                         }
-
-                        extension.startTokenGeneration(
+                        UUID uuid = extension.createTokenGeneratorInstance();
+                        extension.getMapOfTokenGeneratorInstance().get(uuid).startTokenGeneration(
                                 httpMessage,
                                 numGen,
                                 new HtmlParameterStats(
